@@ -1,0 +1,9 @@
+numpy>=1.24.0
+pygame>=2.5.0
+# 若 Python 3.13+ 安装 pygame 失败，可改用: pip install pygame-ce（API 兼容）
+torch>=2.0.0
+# GPU：安装 CUDA 版 PyTorch 见 https://pytorch.org/get-started/locally/ ，如: pip install torch --index-url https://download.pytorch.org/whl/cu118
+scikit-learn>=1.3.0
+scipy>=1.11.0
+joblib>=1.3.0
+matplotlib>=3.7.0
