@@ -4,20 +4,16 @@
 便于调参与扩展，各模块从此处读取配置。
 """
 
-# ========== 赛道生成 ==========
+# ========== 赛道生成（极坐标平滑扰动法，天生闭合无交叉） ==========
 TRACK = {
-    # 椭圆基础形状
-    "ellipse_a_min": 80,       # 长半轴最小值（像素）
-    "ellipse_a_max": 150,      # 长半轴最大值
-    "ellipse_b_min": 60,       # 短半轴最小值
-    "ellipse_b_max": 120,      # 短半轴最大值
-    "center_x": 0,             # 椭圆中心 x（可相对）
-    "center_y": 0,             # 椭圆中心 y
-    "n_sample_points": 64,     # 椭圆离散点数（扰动前）
-    "perturbation_scale": 15,  # 径向扰动幅度（像素）
-    "spline_smoothness": 0.0,  # B 样条平滑因子，0 为插值
-    "n_centerline_points": 128,  # 平滑后中心线重采样点数
-    "half_width": 25,          # 赛道半宽（像素），左右边界 = 中心线 ± half_width
+    "n_theta": 180,             # 极角采样点数（150-200），360° 闭合
+    "base_radius": 150.0,       # 基础半径（像素）
+    "half_width": 35,           # 赛道半宽（像素），左右边界与中心线等距
+    "min_radius_ratio": 0.6,   # 半径最小值 = base_radius * min_radius_ratio，避免过度收缩
+    # 低频扰动系数：仅 2-5 个低频 sin/cos 叠加，无高频噪声
+    # 格式：列表 [(幅度, 角频率), ...]，如 (30, 2) 表示 30*cos(2*theta)
+    "perturbation_terms": [(30, 2), (20, 3), (15, 5)],
+    "smooth_window": 5,         # 中心线二次平滑的移动平均窗口大小（奇数）
 }
 
 # ========== 16 向雷达 ==========

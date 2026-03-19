@@ -26,7 +26,6 @@ def main():
     print("\n========== 2. 依赖包 ==========")
     deps = [
         ("numpy", "numpy"),
-        ("scipy", "scipy"),
         ("sklearn", "scikit-learn"),
         ("joblib", "joblib"),
         ("pygame", "pygame 或 pygame-ce"),
