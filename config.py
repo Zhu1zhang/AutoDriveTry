@@ -14,6 +14,15 @@ TRACK = {
     # 格式：列表 [(幅度, 角频率), ...]，如 (30, 2) 表示 30*cos(2*theta)
     "perturbation_terms": [(30, 2), (20, 3), (15, 5)],
     "smooth_window": 5,         # 中心线二次平滑的移动平均窗口大小（奇数）
+    "n_checkpoints": 8,         # 检查点数量，0 表示关闭；沿中心线均匀取门线
+    "checkpoint_start_index_offset": 1,  # 中心线索引偏移，避免第 0 道门与起点重合
+}
+
+# ========== 检查点计分（PSO 适应度 / Pygame HUD）==========
+CHECKPOINT = {
+    "pass_bonus": 15.0,         # 按序通过一道门的得分（加到 checkpoint_score）
+    "wrong_penalty": 8.0,       # 乱序触门扣分
+    "cooldown_steps": 5,        # 每道门触发后冷却步数，防抖动重复计分
 }
 
 # ========== 16 向雷达 ==========
@@ -50,6 +59,19 @@ PSO = {
         (-0.3, 0.3),   # steer_smooth（平滑项）
     ],
     "visualize_show": False,  # PSO 完成后是否弹窗显示可视化（True 会阻塞到关窗）
+    "visualize_training": True,   # PSO 训练过程中是否实时显示每个粒子轨迹
+    "visualize_max_trajectories": 6,   # 仅绘制前 N 条轨迹（含最优），减少卡顿
+    "visualize_steps": 80,             # 轨迹绘制时的仿真步数（小于 max_steps 以加快）
+    "visualize_update_every": 1,       # 每 N 轮迭代更新一次图（1=每轮）
+    # PSO 适应度加权：降低离墙(min_radar)权重，提高速度与存活时间权重（可调）
+    "fitness_weights": {
+        "total_dist": 0.5,           # 行驶路程
+        "avg_speed": 4.0,            # 平均速度（相对原 2.0 提高）
+        "min_radar": 0.005,          # 全程最小雷达距离（相对原 0.02 降低）
+        "survival_time": 8.0,        # 存活时间 (秒) = 仿真步数 * dt，鼓励跑满不撞
+        "steer_penalty": 0.01,       # 转向抖动惩罚系数
+        "checkpoint": 1.0,           # 检查点累计分 checkpoint_score 的权重（仅未碰撞时）
+    },
 }
 
 # ========== 专家数据采集 ==========
@@ -89,4 +111,6 @@ SIM = {
     "radar_ray_color": (100, 200, 255),
     "radar_hit_color": (255, 180, 80),
     "hud_text_color": (220, 220, 220),
+    "checkpoint_line_color": (255, 220, 60),   # 门线颜色
+    "checkpoint_next_color": (80, 255, 120),     # 下一道门高亮
 }

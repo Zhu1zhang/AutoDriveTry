@@ -43,7 +43,7 @@ def main():
     try:
         import config
         ok("config")
-        from track import generate_track
+        from track import generate_track, unpack_track
         ok("track.generate_track")
         from sensor.radar import get_radar_distances
         ok("sensor.get_radar_distances")
@@ -66,7 +66,7 @@ def main():
     print("\n========== 4. 赛道生成 ==========")
     try:
         track = generate_track(seed=42)
-        c, l, r = track
+        c, l, r, _g = unpack_track(track)
         assert len(c) > 0 and c.shape[1] == 2
         assert len(l) == len(c) and len(r) == len(c)
         ok(f"中心线 {len(c)} 点, 左右边界正常")

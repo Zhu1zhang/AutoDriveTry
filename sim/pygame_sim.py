@@ -8,6 +8,7 @@ import pygame
 
 import config
 from sensor.radar import get_radar_distances
+from track.checkpoints import CheckpointState, score_checkpoint_crossing, unpack_track
 
 
 def _world_to_screen(x, y, sim_cfg):
@@ -19,7 +20,7 @@ def _world_to_screen(x, y, sim_cfg):
 
 def _draw_track(screen, track, sim_cfg):
     """绘制赛道：填充左右边界之间的区域，再画中心线。"""
-    centerline, left_bound, right_bound = track
+    centerline, left_bound, right_bound, _gates = unpack_track(track)
     # 赛道填充（左边界 + 右边界逆序 形成闭合多边形）
     pts = [_world_to_screen(p[0], p[1], sim_cfg) for p in left_bound]
     pts += [_world_to_screen(p[0], p[1], sim_cfg) for p in right_bound[::-1]]
@@ -30,6 +31,18 @@ def _draw_track(screen, track, sim_cfg):
         p1 = _world_to_screen(centerline[i][0], centerline[i][1], sim_cfg)
         p2 = _world_to_screen(centerline[(i + 1) % len(centerline)][0], centerline[(i + 1) % len(centerline)][1], sim_cfg)
         pygame.draw.line(screen, sim_cfg["track_center_color"], p1, p2, 2)
+
+
+def _draw_checkpoints(screen, gates, next_idx, sim_cfg):
+    """绘制检查点门线；下一道门高亮。"""
+    if gates is None or len(gates) == 0:
+        return
+    for k in range(len(gates)):
+        q0, q1 = gates[k, 0], gates[k, 1]
+        p0 = _world_to_screen(q0[0], q0[1], sim_cfg)
+        p1 = _world_to_screen(q1[0], q1[1], sim_cfg)
+        col = sim_cfg.get("checkpoint_next_color") if k == next_idx else sim_cfg.get("checkpoint_line_color")
+        pygame.draw.line(screen, col, p0, p1, 3 if k == next_idx else 2)
 
 
 def _draw_car(screen, x, y, heading, sim_cfg):
@@ -61,15 +74,35 @@ def _draw_radar(screen, x, y, heading, radar_distances, sim_cfg):
         pygame.draw.line(screen, color, start_s, end_s, 1)
 
 
-def _draw_hud(screen, speed, steer, radar_distances, mode_str, sim_cfg, font):
-    """绘制 HUD：速度、转向、模式；可选 16 个雷达距离。"""
+def _draw_hud(
+    screen,
+    speed,
+    steer,
+    radar_distances,
+    mode_str,
+    sim_cfg,
+    font,
+    checkpoint_next=None,
+    checkpoint_score=None,
+    n_checkpoints=0,
+):
+    """绘制 HUD：速度、转向、模式；可选雷达与检查点。"""
     y_pos = 20
     text = font.render(f"模式: {mode_str}  |  速度: {speed:.2f}  |  转向: {steer:.3f}", True, sim_cfg["hud_text_color"])
     screen.blit(text, (20, y_pos))
+    line = 1
     if sim_cfg.get("show_radar_values", True) and radar_distances is not None:
         radar_str = " ".join([f"{d:.0f}" for d in radar_distances])
         text2 = font.render(f"雷达: {radar_str}", True, sim_cfg["hud_text_color"])
-        screen.blit(text2, (20, y_pos + 22))
+        screen.blit(text2, (20, y_pos + 22 * line))
+        line += 1
+    if n_checkpoints > 0 and checkpoint_next is not None and checkpoint_score is not None:
+        t3 = font.render(
+            f"检查点: 下一 #{checkpoint_next + 1}/{n_checkpoints}  |  累计分: {checkpoint_score:.1f}",
+            True,
+            sim_cfg["hud_text_color"],
+        )
+        screen.blit(t3, (20, y_pos + 22 * line))
 
 
 def run_simulation(track, mode="pso", pso_params=None, model=None):
@@ -78,7 +111,7 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
 
     Parameters
     ----------
-    track : tuple of (centerline, left_bound, right_bound)
+    track : tuple of (centerline, left_bound, right_bound[, checkpoint_gates])
     mode : str
         "pso" 或 "nn"
     pso_params : np.ndarray, shape (6,), optional
@@ -89,7 +122,11 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
     pygame.init()
     sim_cfg = config.SIM
     car_cfg = config.CAR
-    centerline, left_bound, right_bound = track
+    centerline, left_bound, right_bound, gates = unpack_track(track)
+    cp_cfg = config.CHECKPOINT
+    n_gates = len(gates) if gates is not None else 0
+    cp_state = CheckpointState.empty(n_gates)
+    checkpoint_total = 0.0
 
     screen = pygame.display.set_mode((sim_cfg["window_width"], sim_cfg["window_height"]))
     pygame.display.set_caption("端到端自动驾驶仿真 - PSO/神经网络")
@@ -135,6 +172,7 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
         steer, target_speed = controller(radar, v)
         prev_steer = steer
 
+        px, py = x, y
         v = v + car_cfg["accel"] * (target_speed - v)
         v = np.clip(v, car_cfg["min_speed"], car_cfg["max_speed"])
         omega = v * np.tan(np.clip(steer, -max_steer, max_steer)) / wheelbase
@@ -142,11 +180,34 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
         x += v * np.cos(theta) * dt
         y += v * np.sin(theta) * dt
 
+        d_cp, cp_state = score_checkpoint_crossing(
+            (px, py),
+            (x, y),
+            gates,
+            cp_state,
+            cp_cfg["pass_bonus"],
+            cp_cfg["wrong_penalty"],
+            cp_cfg["cooldown_steps"],
+        )
+        checkpoint_total += d_cp
+
         screen.fill(sim_cfg["bg_color"])
         _draw_track(screen, track, sim_cfg)
+        _draw_checkpoints(screen, gates, cp_state.next_idx, sim_cfg)
         _draw_radar(screen, x, y, theta, radar, sim_cfg)
         _draw_car(screen, x, y, theta, sim_cfg)
-        _draw_hud(screen, v, steer, radar if sim_cfg.get("show_radar_values") else None, mode.upper(), sim_cfg, font)
+        _draw_hud(
+            screen,
+            v,
+            steer,
+            radar if sim_cfg.get("show_radar_values") else None,
+            mode.upper(),
+            sim_cfg,
+            font,
+            checkpoint_next=cp_state.next_idx,
+            checkpoint_score=checkpoint_total,
+            n_checkpoints=n_gates,
+        )
         pygame.display.flip()
         clock.tick(sim_cfg["fps"])
 

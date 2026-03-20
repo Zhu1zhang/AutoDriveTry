@@ -11,6 +11,7 @@ import numpy as np
 import config
 from sensor.radar import get_radar_distances
 from pso.optimizer import _params_to_steer_speed, _check_collision
+from track.checkpoints import unpack_track
 
 
 def _simulate_and_record(track, pso_params, max_frames):
@@ -18,7 +19,7 @@ def _simulate_and_record(track, pso_params, max_frames):
     用 pso_params 在 track 上仿真，每帧记录 (radar_16, speed) -> (steer, target_speed)。
     仅在未碰撞的帧记录。返回 X (N, 17), Y (N, 2)。
     """
-    centerline, left_bound, right_bound = track
+    centerline, left_bound, right_bound, _gates = unpack_track(track)
     start = centerline[0]
     diff = centerline[1] - centerline[0]
     start_heading = np.arctan2(diff[1], diff[0])

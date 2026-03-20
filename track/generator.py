@@ -57,6 +57,8 @@ def generate_closed_track(n_theta=None, base_radius=None, half_width=None, seed=
     centerline : np.ndarray, shape (N, 2)
     left_bound : np.ndarray, shape (N, 2)
     right_bound : np.ndarray, shape (N, 2)
+    checkpoint_gates : np.ndarray, shape (K, 2, 2) 或 (0, 2, 2)
+        第 k 道门为 left_bound[idx] -> right_bound[idx]；K=0 时为空数组。
     """
     cfg = config.TRACK
     n_theta = n_theta or cfg.get("n_theta", 180)
@@ -105,21 +107,35 @@ def generate_closed_track(n_theta=None, base_radius=None, half_width=None, seed=
     left_bound[-1] = left_bound[0]
     right_bound[-1] = right_bound[0]
 
+    # 检查点：沿闭合中心线均匀取 K 个索引，门线 = 左边界点 -> 右边界点
+    n_cp = int(cfg.get("n_checkpoints", 0) or 0)
+    n_loop = len(centerline) - 1  # 末点与首点重复
+    offset = int(cfg.get("checkpoint_start_index_offset", 1))
+    if n_cp <= 0 or n_loop <= 0:
+        checkpoint_gates = np.zeros((0, 2, 2), dtype=np.float64)
+    else:
+        gates_list = []
+        for k in range(n_cp):
+            idx = (int(k * n_loop / n_cp) + offset) % n_loop
+            gates_list.append([left_bound[idx].copy(), right_bound[idx].copy()])
+        checkpoint_gates = np.asarray(gates_list, dtype=np.float64).reshape(n_cp, 2, 2)
+
     return (
         centerline.astype(np.float64),
         left_bound.astype(np.float64),
         right_bound.astype(np.float64),
+        checkpoint_gates,
     )
 
 
 def generate_track(seed=None):
-    """对外接口：生成闭合赛道，与雷达、PSO、仿真兼容。返回 centerline, left_bound, right_bound。"""
+    """对外接口：生成闭合赛道。返回 (centerline, left_bound, right_bound, checkpoint_gates)。"""
     return generate_closed_track(seed=seed)
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    c, l, r = generate_closed_track(seed=42)
+    c, l, r, _gates = generate_closed_track(seed=42)
     plt.figure(figsize=(7, 7))
     plt.plot(c[:, 0], c[:, 1], "k--", lw=1.5, label="Centerline")
     plt.plot(l[:, 0], l[:, 1], "b-", lw=1, label="Left bound")
