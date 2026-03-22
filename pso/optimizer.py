@@ -7,7 +7,12 @@ import numpy as np
 
 import config
 from sensor.radar import get_radar_distances
-from track.checkpoints import CheckpointState, score_checkpoint_crossing, unpack_track
+from track.checkpoints import (
+    CheckpointState,
+    finalize_checkpoint_episode_score,
+    score_checkpoint_crossing,
+    unpack_track,
+)
 
 
 def _params_to_steer_speed(params, radar_distances, prev_steer=0.0):
@@ -131,6 +136,7 @@ def _simulate_episode(track, params, max_steps, rng):
             cp_cfg["pass_bonus"],
             cp_cfg["wrong_penalty"],
             cp_cfg["cooldown_steps"],
+            lap_bonus=cp_cfg.get("lap_bonus", 0.0),
         )
         checkpoint_score += d_cp
 
@@ -142,6 +148,14 @@ def _simulate_episode(track, params, max_steps, rng):
     n_steps = step + 1
     avg_speed = total_dist / (n_steps * dt) if n_steps > 0 else 0.0
     survival_time = float(n_steps * dt)
+    # 未跑完至少一整圈则扣分（与撞墙无关，checkpoint_score 仍传入 _fitness；撞墙时适应度整体为 0）
+    checkpoint_score = finalize_checkpoint_episode_score(
+        checkpoint_score,
+        gates,
+        cp_state.laps_completed,
+        cp_cfg.get("no_lap_penalty", 0.0),
+        collision=collision,
+    )
     return collision, total_dist, avg_speed, min_radar, steer_changes, survival_time, checkpoint_score
 
 
@@ -194,6 +208,7 @@ def _simulate_episode_with_path(track, params, max_steps):
             cp_cfg["pass_bonus"],
             cp_cfg["wrong_penalty"],
             cp_cfg["cooldown_steps"],
+            lap_bonus=cp_cfg.get("lap_bonus", 0.0),
         )
         checkpoint_score += d_cp
         path_xy.append((x, y))
@@ -204,6 +219,13 @@ def _simulate_episode_with_path(track, params, max_steps):
     n_steps = step + 1
     avg_speed = total_dist / (n_steps * dt) if n_steps > 0 else 0.0
     survival_time = float(n_steps * dt)
+    checkpoint_score = finalize_checkpoint_episode_score(
+        checkpoint_score,
+        gates,
+        cp_state.laps_completed,
+        cp_cfg.get("no_lap_penalty", 0.0),
+        collision=collision,
+    )
     return collision, total_dist, avg_speed, min_radar, steer_changes, survival_time, checkpoint_score, path_xy
 
 

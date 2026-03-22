@@ -106,6 +106,8 @@ def main():
                 "pass_bonus": config.CHECKPOINT["pass_bonus"],
                 "wrong_penalty": config.CHECKPOINT["wrong_penalty"],
                 "cooldown_steps": config.CHECKPOINT["cooldown_steps"],
+                "lap_bonus": config.CHECKPOINT["lap_bonus"],
+                "no_lap_penalty": config.CHECKPOINT["no_lap_penalty"],
             },
             "note": "Re-run with the same --seed to get the same track as pso_result.png",
         }

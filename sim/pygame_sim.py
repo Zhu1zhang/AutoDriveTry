@@ -85,8 +85,9 @@ def _draw_hud(
     checkpoint_next=None,
     checkpoint_score=None,
     n_checkpoints=0,
+    laps_completed=None,
 ):
-    """绘制 HUD：速度、转向、模式；可选雷达与检查点。"""
+    """绘制 HUD：速度、转向、模式；可选雷达与检查点/圈数。"""
     y_pos = 20
     text = font.render(f"模式: {mode_str}  |  速度: {speed:.2f}  |  转向: {steer:.3f}", True, sim_cfg["hud_text_color"])
     screen.blit(text, (20, y_pos))
@@ -97,8 +98,9 @@ def _draw_hud(
         screen.blit(text2, (20, y_pos + 22 * line))
         line += 1
     if n_checkpoints > 0 and checkpoint_next is not None and checkpoint_score is not None:
+        lap_str = f"  |  整圈: {laps_completed}" if laps_completed is not None else ""
         t3 = font.render(
-            f"检查点: 下一 #{checkpoint_next + 1}/{n_checkpoints}  |  累计分: {checkpoint_score:.1f}",
+            f"检查点: 下一 #{checkpoint_next + 1}/{n_checkpoints}  |  累计分: {checkpoint_score:.1f}{lap_str}",
             True,
             sim_cfg["hud_text_color"],
         )
@@ -188,6 +190,7 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
             cp_cfg["pass_bonus"],
             cp_cfg["wrong_penalty"],
             cp_cfg["cooldown_steps"],
+            lap_bonus=cp_cfg.get("lap_bonus", 0.0),
         )
         checkpoint_total += d_cp
 
@@ -207,6 +210,7 @@ def run_simulation(track, mode="pso", pso_params=None, model=None):
             checkpoint_next=cp_state.next_idx,
             checkpoint_score=checkpoint_total,
             n_checkpoints=n_gates,
+            laps_completed=cp_state.laps_completed,
         )
         pygame.display.flip()
         clock.tick(sim_cfg["fps"])

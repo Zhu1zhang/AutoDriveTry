@@ -23,6 +23,8 @@ CHECKPOINT = {
     "pass_bonus": 15.0,         # 按序通过一道门的得分（加到 checkpoint_score）
     "wrong_penalty": 8.0,       # 乱序触门扣分
     "cooldown_steps": 5,        # 每道门触发后冷却步数，防抖动重复计分
+    "lap_bonus": 50.0,          # 按序通过最后一道门完成一整圈时的额外加分
+    "no_lap_penalty": 30.0,     # 回合结束仍未完成至少一圈时扣分（无检查点时不生效）
 }
 
 # ========== 16 向雷达 ==========

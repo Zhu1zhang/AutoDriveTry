@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 检查点门线：左边界到右边界线段；按序通过加分、乱序扣分；带冷却防抖。
+按序通过最后一道门计为一整圈，额外 lap_bonus；PSO 回合结束若未撞墙却未完成至少一圈则扣 no_lap_penalty。
 """
 from __future__ import annotations
 
@@ -59,17 +60,24 @@ def segment_crosses_segment(p0, p1, q0, q1, eps=1e-10):
 
 @dataclass
 class CheckpointState:
-    """检查点计分状态：下一个期望门下标、每门冷却步数。"""
+    """检查点计分状态：下一个期望门下标、每门冷却、已完成整圈次数。"""
 
     next_idx: int = 0
     cooldown: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int32))
+    laps_completed: int = 0
 
     @classmethod
     def empty(cls, n_gates: int):
-        return cls(next_idx=0, cooldown=np.zeros(max(0, n_gates), dtype=np.int32))
+        return cls(
+            next_idx=0,
+            cooldown=np.zeros(max(0, n_gates), dtype=np.int32),
+            laps_completed=0,
+        )
 
 
-def score_checkpoint_crossing(prev_xy, curr_xy, gates, state, bonus, penalty, cooldown_steps):
+def score_checkpoint_crossing(
+    prev_xy, curr_xy, gates, state, bonus, penalty, cooldown_steps, lap_bonus=0.0
+):
     """
     本步位移线段与门线求交，更新得分与状态。
 
@@ -80,6 +88,8 @@ def score_checkpoint_crossing(prev_xy, curr_xy, gates, state, bonus, penalty, co
     state : CheckpointState
     bonus, penalty : float
     cooldown_steps : int
+    lap_bonus : float
+        通过最后一道门（闭环一整圈）时额外加分。
 
     Returns
     -------
@@ -108,12 +118,34 @@ def score_checkpoint_crossing(prev_xy, curr_xy, gates, state, bonus, penalty, co
         return delta, state
 
     if state.next_idx in hits:
+        old_next = state.next_idx
         delta += bonus
-        state.cooldown[state.next_idx] = int(cooldown_steps)
-        state.next_idx = (state.next_idx + 1) % K
+        # 通过最后一道门后 next 回到 0，记为一整圈
+        if old_next == K - 1:
+            state.laps_completed += 1
+            delta += float(lap_bonus)
+        state.cooldown[old_next] = int(cooldown_steps)
+        state.next_idx = (old_next + 1) % K
     else:
         delta -= penalty
         for k in hits:
             state.cooldown[k] = int(cooldown_steps)
 
     return delta, state
+
+
+def finalize_checkpoint_episode_score(
+    checkpoint_score, gates, laps_completed, no_lap_penalty, collision=False
+):
+    """
+    回合结束：若赛道上有关卡、本回合未撞墙、但未完成至少一整圈，扣 no_lap_penalty。
+    撞墙时不扣（适应度已按碰撞归零）。无检查点时不改分。
+    """
+    if gates is None or len(gates) == 0:
+        return float(checkpoint_score)
+    if collision:
+        return float(checkpoint_score)
+    pen = float(no_lap_penalty or 0.0)
+    if pen != 0.0 and laps_completed < 1:
+        return float(checkpoint_score) - pen
+    return float(checkpoint_score)
