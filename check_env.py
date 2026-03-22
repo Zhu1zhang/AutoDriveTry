@@ -43,8 +43,9 @@ def main():
     try:
         import config
         ok("config")
-        from track import generate_track, unpack_track
+        from track import generate_track, load_track_npz, unpack_track
         ok("track.generate_track")
+        ok("track.load_track_npz")
         from sensor.radar import get_radar_distances
         ok("sensor.get_radar_distances")
         from pso.optimizer import run_pso

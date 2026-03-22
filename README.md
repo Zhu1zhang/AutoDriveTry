@@ -19,6 +19,10 @@
 - **神经网络训练**：17→32→64→2 全连接网络（ReLU），回归转向与速度，支持 scikit-learn 或 PyTorch，训练曲线可视化。
 - **Pygame 仿真**：实时绘制赛道、车辆、雷达射线与 HUD，支持 PSO 专家模式与神经网络自动驾驶模式。
 
+## 架构图（Mermaid）
+
+彩色流程图见目录 **[docs/diagrams/](docs/diagrams/)**（`README.md` 为索引，各图为独立 `.md` 文件）。
+
 ## 安装
 
 ```bash
@@ -61,20 +65,26 @@ python main.py
 - `--seed 42`：随机种子（`generate_track(seed)` 与 PSO）；**与 `pso_result.png` 中赛道一致需使用相同 seed**。完整跑完 PSO 后会在 `data/models/` 生成 `pso_track_meta.json`（seed 与赛道参数）和 `training_track.npz`（中心线与边界点），便于对照结果图复现同一条赛道。
 - `--skip-pso`：跳过 PSO，使用默认参数采集（需确保已有或接受少量样本）
 - `--skip-train`：跳过训练，仅运行仿真（需已有 `data/models/mlp.pkl`）
-- `--sim-only`：仅运行仿真，加载已有模型（会按当前 seed 重新生成赛道）
+- `--sim-only`：仅运行神经网络仿真；**默认优先加载** `data/models/training_track.npz`（与当次 PSO 保存的赛道几何一致）；若无存档则 `generate_track(seed)`。`--regenerate-track` 可强制仅用 seed 重新生成。
+- `--track-npz 路径`：从指定 `.npz` 加载赛道（与 PSO 保存格式相同）。
 - `--no-sim`：不启动 Pygame，只执行 PSO + 采集 + 训练
 - `--pso-visualize`：PSO 训练时实时显示每个粒子轨迹（弹窗逐轮更新）
 - `--data-dir data/expert_data`：专家数据目录
 - `--model-path data/models/mlp.pkl`：模型保存/加载路径
+
+**仅测神经网络（无界面）**：在项目根目录执行 `python test_nn.py`（加载 `mlp.pkl` 并做 `predict` 自检）；可加 `--with-expert` 在有 `expert_X/Y.npy` 时算 MAE。
 
 ## 项目结构
 
 ```
 F1-project/
 ├── main.py                 # 主入口，一键运行
+├── test_nn.py              # 无 Pygame：加载模型并测试 predict
 ├── config.py               # 全局配置（赛道/雷达/PSO/网络/仿真）
 ├── requirements.txt
 ├── README.md
+├── docs/
+│   └── diagrams/             # Mermaid 架构图（鲜艳配色）
 ├── track/
 │   └── generator.py        # 样条扰动法随机赛道生成
 ├── sensor/

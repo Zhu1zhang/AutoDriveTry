@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -149,3 +150,25 @@ def finalize_checkpoint_episode_score(
     if pen != 0.0 and laps_completed < 1:
         return float(checkpoint_score) - pen
     return float(checkpoint_score)
+
+
+def load_track_npz(path):
+    """
+    从 PSO/主流程保存的 training_track.npz 加载赛道，返回结构与 generate_track 一致：
+    (centerline, left_bound, right_bound, checkpoint_gates)。
+    用于神经网络测试与 PSO 使用同一条赛道（同一随机种子生成的几何存档）。
+    """
+    path = os.path.abspath(path)
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"未找到赛道存档: {path}")
+    data = np.load(path, allow_pickle=False)
+    centerline = np.asarray(data["centerline"], dtype=np.float64)
+    left_bound = np.asarray(data["left_bound"], dtype=np.float64)
+    right_bound = np.asarray(data["right_bound"], dtype=np.float64)
+    if "checkpoint_gates" in data.files:
+        checkpoint_gates = np.asarray(data["checkpoint_gates"], dtype=np.float64)
+        if checkpoint_gates.size == 0:
+            checkpoint_gates = np.zeros((0, 2, 2), dtype=np.float64)
+    else:
+        checkpoint_gates = np.zeros((0, 2, 2), dtype=np.float64)
+    return (centerline, left_bound, right_bound, checkpoint_gates)

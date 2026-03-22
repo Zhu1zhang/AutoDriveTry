@@ -15,7 +15,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import config
-from track import generate_track, unpack_track
+from track import generate_track, load_track_npz, unpack_track
 from pso import run_pso, plot_pso_results
 from expert import collect_expert_data
 from model.network import create_model, predict
@@ -34,7 +34,40 @@ def parse_args():
     parser.add_argument("--no-pso-visualize", action="store_true", help="关闭 PSO 实时轨迹（覆盖 config 中的 visualize_training，适合后台训练）")
     parser.add_argument("--data-dir", type=str, default="data/expert_data", help="专家数据目录")
     parser.add_argument("--model-path", type=str, default="data/models/mlp.pkl", help="模型保存/加载路径")
+    parser.add_argument(
+        "--track-npz",
+        type=str,
+        default=None,
+        help="从指定 training_track.npz 加载赛道（与 generate_track 存档格式一致）",
+    )
+    parser.add_argument(
+        "--regenerate-track",
+        action="store_true",
+        help="--sim-only 时不加载 training_track.npz，仅用 --seed 调用 generate_track",
+    )
     return parser.parse_args()
+
+
+def _resolve_track(args, model_path):
+    """
+    与 PSO 同源：默认用 track.generate_track(seed)（极坐标平滑扰动 + seed 扰动项）。
+    --sim-only 时优先加载 training_track.npz，使神经网络测试与当次 PSO 赛道几何完全一致。
+    """
+    models_dir = os.path.dirname(model_path) or "data/models"
+    if args.track_npz:
+        print(f"【赛道】从指定存档加载: {args.track_npz}")
+        return load_track_npz(args.track_npz)
+    if args.sim_only and not args.regenerate_track:
+        npz_default = os.path.join(models_dir, "training_track.npz")
+        if os.path.isfile(npz_default):
+            print(f"【赛道】加载与 PSO 训练相同的存档: {npz_default}")
+            return load_track_npz(npz_default)
+        print(f"【赛道】未找到 {npz_default}，回退为 generate_track(seed={args.seed})")
+    elif args.sim_only and args.regenerate_track:
+        print(f"【赛道】--regenerate-track：generate_track(seed={args.seed})（与 PSO 相同生成函数）")
+    else:
+        print(f"【赛道】generate_track(seed={args.seed})，与 PSO 使用相同随机生成方法")
+    return generate_track(seed=args.seed)
 
 
 def main():
@@ -44,16 +77,16 @@ def main():
     os.makedirs(os.path.dirname(model_path) or "data/models", exist_ok=True)
     os.makedirs(data_dir, exist_ok=True)
 
-    # ---------- 1. 生成赛道 ----------
-    print("【1/6】生成随机赛道...")
-    track = generate_track(seed=args.seed)
+    # ---------- 1. 生成/加载赛道（与 PSO 同源：同 seed 同 generate_track；sim-only 优先读 training_track.npz） ----------
+    print("【1/6】准备赛道...")
+    track = _resolve_track(args, model_path)
     centerline, left_bound, right_bound, gates = unpack_track(track)
     n_cp = len(gates) if gates is not None else 0
     print(f"  中心线点数: {len(centerline)}, 半宽: {config.TRACK['half_width']}, 检查点: {n_cp}")
 
     if args.sim_only:
-        # 仅仿真模式：加载已有模型（赛道按当前 seed 重新生成）
-        print("【仅仿真】使用当前 seed 生成赛道，加载已有模型...")
+        # 仅仿真模式：默认加载 training_track.npz（与 PSO 同图）；否则同 generate_track(seed)
+        print("【仅仿真】加载已有模型；赛道见上方【赛道】说明...")
         if not os.path.isfile(model_path):
             print("  错误：未找到模型文件，请先运行完整流程或去掉 --sim-only")
             return
@@ -120,6 +153,9 @@ def main():
         np.savez_compressed(npz_path, **save_kw)
         print(f"  赛道元数据: {meta_path}")
         print(f"  赛道几何存档: {npz_path}")
+        # 专家采集、PSO/NN 仿真统一使用存档中的几何，与 PSO 优化阶段完全一致
+        track = load_track_npz(npz_path)
+        print("  后续采集与仿真（含神经网络）已切换为与上述存档一致的几何。")
     else:
         print("【2/6】跳过 PSO，将使用已有专家数据训练（需确保已有采集数据）")
         # 若无已有参数，用默认参数做一次采集以便仅训练
